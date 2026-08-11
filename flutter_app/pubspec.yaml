@@ -1,0 +1,32 @@
+name: route_card_app
+description: Digital Route Card System - Enterprise manufacturing traveler management
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.1.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  http: ^1.2.0
+  provider: ^6.1.1
+  google_fonts: ^6.1.0
+  intl: ^0.19.0
+  shimmer: ^3.0.0
+  flutter_staggered_animations: ^1.1.1
+  url_launcher: ^6.2.2
+  google_sign_in: ^7.2.0
+  shared_preferences: ^2.5.5
+  file_picker: ^11.0.3
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+
+dependency_overrides:
+  path_provider_foundation: 2.3.2
