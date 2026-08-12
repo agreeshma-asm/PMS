@@ -3,6 +3,10 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
 class ApiService {
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+  ApiService._internal();
+
   final Map<String, String> _headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',

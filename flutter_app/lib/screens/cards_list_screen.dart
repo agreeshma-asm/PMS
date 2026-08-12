@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/cards_provider.dart';
 import '../providers/auth_provider.dart';
 import 'card_detail_screen.dart';
+import '../widgets/pulse_badge.dart';
 
 class CardsListScreen extends StatefulWidget {
   const CardsListScreen({super.key});
@@ -20,6 +21,11 @@ class _CardsListScreenState extends State<CardsListScreen> {
   Widget build(BuildContext context) {
     final provider = Provider.of<CardsProvider>(context);
     List<dynamic> cards = provider.routeCards;
+    
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardTheme.color ?? (isDark ? const Color(0xFF1E293B) : Colors.white);
+    final bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final textColor = Theme.of(context).textTheme.bodyMedium?.color;
 
     // Apply filters
     if (_riskFilter != 'ALL') {
@@ -41,7 +47,7 @@ class _CardsListScreenState extends State<CardsListScreen> {
           // ── Filter Bar ──
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: const Color(0xFF1E293B),
+            color: cardColor,
             child: Row(
               children: [
                 // Risk filter chips
@@ -114,6 +120,12 @@ class _CardsListScreenState extends State<CardsListScreen> {
     final total = card['stepCount'] ?? 7;
     final failed = card['failedSteps'] ?? 0;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardTheme.color ?? (isDark ? const Color(0xFF1E293B) : Colors.white);
+    final textColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final subTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final borderColor = isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.05);
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -125,9 +137,10 @@ class _CardsListScreenState extends State<CardsListScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: cardColor,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
+          border: Border.all(color: borderColor),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -135,16 +148,9 @@ class _CardsListScreenState extends State<CardsListScreen> {
             // Header row
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: riskColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(risk, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: riskColor)),
-                ),
+                PulseBadge(text: risk, color: riskColor),
                 const SizedBox(width: 8),
-                Text(card['cardNumber'] ?? '', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                Text(card['cardNumber'] ?? '', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: textColor)),
                 const Spacer(),
                 if (failed > 0)
                   Container(
@@ -166,15 +172,15 @@ class _CardsListScreenState extends State<CardsListScreen> {
             ),
             const SizedBox(height: 6),
             Text('${card['jobName'] ?? ''} — ${card['partNumber'] ?? ''}',
-                style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF94A3B8))),
+                style: GoogleFonts.inter(fontSize: 13, color: subTextColor)),
             const SizedBox(height: 4),
             Row(
               children: [
-                Text('KO: ${card['koNumber'] ?? 'N/A'}', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B))),
+                Text('KO: ${card['koNumber'] ?? 'N/A'}', style: GoogleFonts.inter(fontSize: 12, color: subTextColor)),
                 const SizedBox(width: 12),
-                Text('WO: ${card['workOrderNumber'] ?? ''}', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B))),
+                Text('WO: ${card['workOrderNumber'] ?? ''}', style: GoogleFonts.inter(fontSize: 12, color: subTextColor)),
                 const Spacer(),
-                Text('$completed/$total steps', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF94A3B8))),
+                Text('$completed/$total steps', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: subTextColor)),
               ],
             ),
 
@@ -186,8 +192,8 @@ class _CardsListScreenState extends State<CardsListScreen> {
                 final color = status == 'Completed' ? const Color(0xFF10B981)
                     : status == 'In Progress' ? const Color(0xFF3B82F6)
                     : status == 'Failed' ? const Color(0xFFEF4444)
-                    : status == 'N/A' ? Colors.grey.shade600
-                    : const Color(0xFF334155);
+                    : status == 'N/A' ? Colors.grey.shade400
+                    : const Color(0xFFCBD5E1);
                 return Expanded(
                   child: Tooltip(
                     message: '${step['operationName']}: $status',

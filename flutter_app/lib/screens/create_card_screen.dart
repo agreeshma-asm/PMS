@@ -32,6 +32,7 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
   // BOM Upload
   List<dynamic> _bomItems = [];
   String _bomKoNumber = '';
+  final _bomNumberController = TextEditingController();
   bool _isUploadingBom = false;
   bool _isCreatingBulk = false;
 
@@ -63,19 +64,24 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
     final provider = Provider.of<CardsProvider>(context);
     final wos = provider.workOrders;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final cardColor = Theme.of(context).cardTheme.color ?? (isDark ? const Color(0xFF1E293B) : Colors.white);
+    final borderColor = isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1);
+    final inputBgColor = Theme.of(context).inputDecorationTheme.fillColor ?? (isDark ? const Color(0xFF0F172A) : Colors.white);
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: bgColor,
         appBar: AppBar(
           title: Text('Create Route Card', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-          backgroundColor: const Color(0xFF1E293B),
           elevation: 0,
           bottom: const TabBar(
             indicatorColor: Color(0xFF3B82F6),
             tabs: [
-              Tab(text: 'Single Entry'),
-              Tab(text: 'BOM Upload (Bulk)'),
+              Tab(icon: Icon(Icons.add_task), text: 'Single Entry'),
+              Tab(icon: Icon(Icons.drive_folder_upload), text: 'BOM Upload (Bulk)'),
             ],
           ),
         ),
@@ -89,22 +95,28 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── PMS Work Order Selection ──
-              Text('Select from PMS Work Orders',
-                  style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: const Color(0xFF94A3B8))),
+              Row(
+                children: [
+                  Icon(Icons.work_outline, size: 20, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text('Select from PMS Work Orders',
+                      style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
+                ],
+              ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
+                  color: inputBgColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  border: Border.all(color: borderColor),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     isExpanded: true,
-                    hint: const Text('Choose a Work Order...', style: TextStyle(color: Color(0xFF94A3B8))),
+                    hint: Text('Choose a Work Order...', style: TextStyle(color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
                     value: _selectedWO != null ? _selectedWO!['workOrderNumber'] : null,
-                    dropdownColor: const Color(0xFF1E293B),
+                    dropdownColor: cardColor,
                     items: wos.take(200).map<DropdownMenuItem<String>>((wo) {
                       final risk = wo['riskLevel'] ?? 'LOW';
                       final color = risk == 'HIGH' ? const Color(0xFFEF4444)
@@ -239,9 +251,10 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: cardColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF334155)),
+                  border: Border.all(color: borderColor),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4)],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,10 +289,10 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.05),
+                              color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
                               borderRadius: BorderRadius.circular(4),
                             ),
-                            child: const Text('Pending', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                            child: Text('Pending', style: TextStyle(fontSize: 11, color: Theme.of(context).textTheme.bodySmall?.color)),
                           ),
                         ]),
                       ),
@@ -345,6 +358,12 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
 }
 
   Widget _buildBomUploadTab(BuildContext context, CardsProvider provider) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardTheme.color ?? (isDark ? const Color(0xFF1E293B) : Colors.white);
+    final borderColor = isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1);
+    final textColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final subTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -353,18 +372,19 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: cardColor,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF334155)),
+              border: Border.all(color: borderColor),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4)],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const Icon(Icons.upload_file, size: 48, color: Color(0xFF3B82F6)),
                 const SizedBox(height: 16),
-                Text('Upload BOM File', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+                Text('Upload BOM File', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: textColor)),
                 const SizedBox(height: 8),
-                Text('Select an Excel file (.xlsx, .xls) to parse and preview items for bulk Route Card creation.', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF94A3B8))),
+                Text('Select an Excel file (.xlsx, .xls) to parse and preview items for bulk Route Card creation.', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 13, color: subTextColor)),
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
@@ -394,7 +414,12 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
                           }
                         }
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ')));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Upload Error: $e'),
+                            backgroundColor: const Color(0xFFEF4444),
+                          ));
+                        }
                       } finally {
                         setState(() => _isUploadingBom = false);
                       }
@@ -418,36 +443,36 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Preview:  Items', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                Text('Preview: ${_bomItems.length} Items', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: textColor)),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(color: const Color(0xFF3B82F6).withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-                  child: Text('KO: ', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF3B82F6))),
+                  child: Text('KO: $_bomKoNumber', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF3B82F6))),
                 ),
               ],
             ),
             const SizedBox(height: 16),
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: cardColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: borderColor),
               ),
               child: ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _bomItems.length > 5 ? 5 : _bomItems.length,
-                separatorBuilder: (context, index) => const Divider(color: Color(0xFF334155), height: 1),
+                separatorBuilder: (context, index) => Divider(color: borderColor, height: 1),
                 itemBuilder: (context, index) {
                   final item = _bomItems[index];
                   return ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    title: Text(item['partNo'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                    title: Text(item['partNo'] ?? '', style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 4),
-                      child: Text(item['description'] ?? '', style: const TextStyle(color: Color(0xFF94A3B8))),
+                      child: Text(item['description'] ?? '', style: TextStyle(color: subTextColor)),
                     ),
-                    trailing: Text('Qty: ', style: const TextStyle(color: Color(0xFF94A3B8))),
+                    trailing: Text('Qty: ${item['qty']}', style: TextStyle(color: subTextColor)),
                   );
                 },
               ),
@@ -455,8 +480,14 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
             if (_bomItems.length > 5)
               Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Center(child: Text('+  more items...', style: const TextStyle(color: Color(0xFF94A3B8)))),
+                child: Center(child: Text('+ ${_bomItems.length - 5} more items...', style: const TextStyle(color: Color(0xFF94A3B8)))),
               ),
+            const SizedBox(height: 24),
+            _buildLabel('BOM Number', isRequired: true),
+            TextFormField(
+              controller: _bomNumberController,
+              decoration: _inputDecoration('Enter BOM Number (e.g. BOM-001)'),
+            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -465,16 +496,21 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
                 onPressed: _isCreatingBulk ? null : () async {
                   setState(() => _isCreatingBulk = true);
                   try {
-                    final createdCount = await provider.bulkCreateRouteCards(_bomKoNumber, _bomItems);
+                    if (_bomNumberController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a BOM Number')));
+                      setState(() => _isCreatingBulk = false);
+                      return;
+                    }
+                    final createdCount = await provider.bulkCreateRouteCards(_bomKoNumber, _bomNumberController.text.trim(), _bomItems);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Successfully created  route cards!'), backgroundColor: const Color(0xFF10B981)));
+                        SnackBar(content: Text('Successfully created $createdCount route cards!'), backgroundColor: const Color(0xFF10B981)));
                       Navigator.pop(context);
                     }
                   } catch (e) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: '), backgroundColor: const Color(0xFFEF4444)));
+                        SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFEF4444)));
                     }
                   } finally {
                     if (mounted) setState(() => _isCreatingBulk = false);
@@ -496,22 +532,16 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
   }
 
   Widget _buildLabel(String text, {bool isRequired = false}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF94A3B8))),
+      child: Text(text, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
     );
   }
 
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFF475569)),
-      filled: true,
-      fillColor: const Color(0xFF0F172A),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withOpacity(0.1))),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withOpacity(0.1))),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 2)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 }

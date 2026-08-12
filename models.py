@@ -64,6 +64,7 @@ class LoginWithPasswordRequest(BaseModel):
 
 class GoogleLoginRequest(BaseModel):
     idToken: str
+    role: Optional[UserRole] = None
 
 class ForgotPasswordRequest(BaseModel):
     email: str
@@ -169,4 +170,5 @@ class SimulateNotifRequest(BaseModel):
 
 class BulkCreateRequest(BaseModel):
     koNumber: str
+    bomNumber: str
     items: List[Dict[str, Any]]

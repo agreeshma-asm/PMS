@@ -95,12 +95,13 @@ class CardsProvider extends ChangeNotifier {
     }
   }
 
-  Future<int> bulkCreateRouteCards(String koNumber, List<dynamic> items) async {
+  Future<int> bulkCreateRouteCards(String koNumber, String bomNumber, List<dynamic> items) async {
     _isLoading = true;
     notifyListeners();
     try {
       final response = await _apiService.post('/bom/bulk-create', body: {
         'koNumber': koNumber,
+        'bomNumber': bomNumber,
         'items': items,
       });
       await fetchDashboardData();

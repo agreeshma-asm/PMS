@@ -35,9 +35,10 @@ STANDARD_PROCESS_STEPS = [
 # ─── Seed Data ─────────────────────────────────────────────────────────────────
 
 _SEED_USERS = [
-    {"id": "u-1", "name": "Rajesh Kumar", "email": "admin@asmltd.com", "role": "Admin", "password": _DEFAULT_HASH, "createdAt": "2025-01-10T08:00:00Z"},
-    {"id": "u-2", "name": "Priya Sharma", "email": "operator1@asmltd.com", "role": "Operator", "password": _DEFAULT_HASH, "createdAt": "2025-01-12T09:00:00Z"},
-    {"id": "u-3", "name": "Sarah Engineer", "email": "engineer1@asmltd.com", "role": "Shift Engineer", "password": _DEFAULT_HASH, "createdAt": "2025-01-15T10:00:00Z"},
+    {"id": "u-1", "name": "Rajesh Kumar", "email": "admin@asmltd.com", "role": "Admin", "workCenter": "All", "password": _DEFAULT_HASH, "createdAt": "2025-01-10T08:00:00Z"},
+    {"id": "u-2", "name": "Priya Sharma", "email": "operator1@asmltd.com", "role": "Operator", "workCenter": "machining", "password": _DEFAULT_HASH, "createdAt": "2025-01-12T09:00:00Z"},
+    {"id": "u-3", "name": "Sarah Engineer", "email": "engineer1@asmltd.com", "role": "Shift Engineer", "workCenter": "All", "password": _DEFAULT_HASH, "createdAt": "2025-01-15T10:00:00Z"},
+    {"id": "u-4", "name": "Rahul QA", "email": "qc@asmltd.com", "role": "Operator", "workCenter": "iqc", "password": _DEFAULT_HASH, "createdAt": "2025-01-16T10:00:00Z"},
 ]
 
 def _make_seed_steps():

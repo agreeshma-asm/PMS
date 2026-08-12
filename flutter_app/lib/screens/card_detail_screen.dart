@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/cards_provider.dart';
 import '../config/api_config.dart';
+import '../widgets/pulse_badge.dart';
 
 class CardDetailScreen extends StatefulWidget {
   final String cardId;
@@ -73,6 +74,11 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
     final riskColor = risk == 'HIGH' ? const Color(0xFFEF4444)
         : risk == 'MEDIUM' ? const Color(0xFFF59E0B) : const Color(0xFF10B981);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardTheme.color ?? (isDark ? const Color(0xFF1E293B) : Colors.white);
+    final borderColor = isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.05);
+    final subTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(card['cardNumber'] ?? 'Route Card',
@@ -89,7 +95,7 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -97,30 +103,24 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: cardColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.06)),
+                border: Border.all(color: borderColor),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
               ),
               child: Column(
                 children: [
-                  _infoRow('KO Number', card['koNumber'] ?? 'N/A'),
-                  _infoRow('Job Name', card['jobName'] ?? ''),
-                  _infoRow('Part Number', card['partNumber'] ?? ''),
-                  _infoRow('Work Order', card['workOrderNumber'] ?? ''),
-                  _infoRow('Batch Qty', '${card['batchQuantity'] ?? 0}'),
-                  _infoRow('Status', card['status'] ?? 'Pending'),
+                  _infoRow('KO Number', card['koNumber'] ?? 'N/A', subTextColor),
+                  _infoRow('Job Name', card['jobName'] ?? '', subTextColor),
+                  _infoRow('Part Number', card['partNumber'] ?? '', subTextColor),
+                  _infoRow('Work Order', card['workOrderNumber'] ?? '', subTextColor),
+                  _infoRow('Batch Qty', '${card['batchQuantity'] ?? 0}', subTextColor),
+                  _infoRow('Status', card['status'] ?? 'Pending', subTextColor),
                   Row(
                     children: [
-                      Text('Risk Level', style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF94A3B8))),
+                      Text('Risk Level', style: GoogleFonts.inter(fontSize: 13, color: subTextColor)),
                       const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: riskColor.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(risk, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: riskColor)),
-                      ),
+                      PulseBadge(text: risk, color: riskColor),
                     ],
                   ),
                 ],
@@ -130,9 +130,15 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
             const SizedBox(height: 24),
 
             // ── 7-Step Process Pipeline ──
-            Text('Process Pipeline', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
+            Row(
+              children: [
+                Icon(Icons.precision_manufacturing, size: 20, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('Process Pipeline', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
+              ],
+            ),
             const SizedBox(height: 4),
-            Text('7 standard manufacturing steps', style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF94A3B8))),
+            Text('7 standard manufacturing steps', style: GoogleFonts.inter(fontSize: 13, color: subTextColor)),
             const SizedBox(height: 16),
 
             // Horizontal progress bar
@@ -164,9 +170,15 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: cardColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border(left: BorderSide(color: color, width: 4)),
+                  border: Border(
+                    left: BorderSide(color: color, width: 4),
+                    top: BorderSide(color: borderColor),
+                    right: BorderSide(color: borderColor),
+                    bottom: BorderSide(color: borderColor),
+                  ),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 2)],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,7 +192,7 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('Step ${step['stepNumber']}',
-                                  style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B))),
+                                  style: GoogleFonts.inter(fontSize: 11, color: subTextColor)),
                               Text(step['operationName'] ?? '',
                                   style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600)),
                             ],
@@ -197,7 +209,7 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(step['instructions'] ?? '', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF94A3B8))),
+                    Text(step['instructions'] ?? '', style: GoogleFonts.inter(fontSize: 12, color: subTextColor)),
 
                     if (step['signedOffBy'] != null) ...[
                       const SizedBox(height: 6),
@@ -333,12 +345,12 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
     );
   }
 
-  Widget _infoRow(String label, String value) {
+  Widget _infoRow(String label, String value, Color subTextColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Text(label, style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF94A3B8))),
+          Text(label, style: GoogleFonts.inter(fontSize: 13, color: subTextColor)),
           const Spacer(),
           Text(value, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500)),
         ],
@@ -348,10 +360,11 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
 
   void _showIQCFailDialog(String cardId, String stepId) {
     final reasonController = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Theme.of(context).cardTheme.color,
         title: Text('IQC Fail — Reject / Return to Vendor', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFFEF4444))),
         content: TextField(
           controller: reasonController,
@@ -362,7 +375,7 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
           maxLines: 3,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
             onPressed: () async {
@@ -380,14 +393,15 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
   }
 
   void _showReinspectDialog(String cardId, String stepId) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Theme.of(context).cardTheme.color,
         title: Text('Re-inspect After Vendor Return', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFFF59E0B))),
-        content: Text('Initiate re-inspection for this material?', style: GoogleFonts.inter(color: const Color(0xFF94A3B8))),
+        content: Text('Initiate re-inspection for this material?', style: GoogleFonts.inter(color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF59E0B)),
             onPressed: () async {

@@ -76,8 +76,9 @@ def google_login(req: GoogleLoginRequest):
     # Check if user exists
     user = next((u for u in db.users if u["email"] == email), None)
     if not user:
-        # Auto-register google users as Operator
-        user = db.register_user(email, name, "Operator", "google-sso-placeholder")
+        # Auto-register google users with requested role or default to Operator
+        role_value = req.role.value if req.role else "Operator"
+        user = db.register_user(email, name, role_value, "google-sso-placeholder")
     
     token = create_access_token(user["id"], user["role"])
     db.log_activity(user["id"], user["name"], user["email"], "google login", f"User successfully authenticated via Google")
@@ -246,45 +247,81 @@ async def parse_bom(file: UploadFile = File(...)):
             
         import openpyxl
         wb = openpyxl.load_workbook(tmp_path, data_only=True)
-        ws = wb.active
         
         ko_number = ""
-        for row in ws.iter_rows(min_row=1, max_row=5, values_only=True):
-            row_vals = [str(v).strip() if v is not None else "" for v in row]
-            if any("Program No" in v for v in row_vals):
-                for idx, v in enumerate(row_vals):
-                    if "Program No" in v:
-                        for next_idx in range(idx + 1, len(row_vals)):
-                            if row_vals[next_idx]:
-                                ko_number = row_vals[next_idx]
-                                break
-                        break
-                break
-                
-        if not ko_number:
-            ko_number = "UNKNOWN_KO"
-            
-        header_row_idx = 0
-        col_map = {}
-        for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=20, values_only=True)):
-            row_vals = [str(v).strip() if v is not None else "" for v in row]
-            if "Part No" in row_vals and "Description" in row_vals:
-                header_row_idx = row_idx + 1
-                for i, val in enumerate(row_vals):
-                    if val:
-                        col_map[val] = i
-                break
-                
         items = []
-        if header_row_idx:
+        
+        # Scan ALL sheets (BOM data may not be on the active/first sheet)
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            if ws.max_row is None or ws.max_row < 2:
+                continue
+            
+            # --- Find KO / Program Number in the first 10 rows ---
+            if not ko_number:
+                for row in ws.iter_rows(min_row=1, max_row=min(10, ws.max_row), values_only=True):
+                    row_vals = [str(v).strip() if v is not None else "" for v in row]
+                    for search_key in ("Program No", "Program No:", "KO No", "KO Number"):
+                        for idx, v in enumerate(row_vals):
+                            if search_key in v:
+                                for next_idx in range(idx + 1, len(row_vals)):
+                                    if row_vals[next_idx] and row_vals[next_idx] != "-":
+                                        ko_number = row_vals[next_idx]
+                                        break
+                                break
+                    if ko_number:
+                        break
+            
+            # --- Find header row containing Part No / Drawing Number + Description ---
+            header_row_idx = 0
+            col_map = {}
+            for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=min(20, ws.max_row), values_only=True)):
+                row_vals = [str(v).strip() if v is not None else "" for v in row]
+                # Accept header if it has Description AND any part identifier column
+                has_desc = "Description" in row_vals
+                has_part = "Part No" in row_vals or "Drawing Number" in row_vals or "Part Number" in row_vals
+                if has_desc and has_part:
+                    header_row_idx = row_idx + 1
+                    for i, val in enumerate(row_vals):
+                        if val:
+                            col_map[val] = i
+                    break
+            
+            if not header_row_idx or not col_map:
+                continue  # Try next sheet
+            
+            # --- Determine which column to use for Part No ---
+            # Priority: "Drawing Number" > "Part No" > "Part Number" 
+            # (in ASM BOMs, "Part No" is often "-" while "Drawing Number" has the real identifier)
+            part_col_key = None
+            for candidate in ("Drawing Number", "Part No", "Part Number"):
+                if candidate in col_map:
+                    part_col_key = candidate
+                    break
+            
+            desc_col = col_map.get("Description")
+            qty_col = col_map.get("Qty", col_map.get("Quantity"))
+            
+            if part_col_key is None or desc_col is None:
+                continue  # Try next sheet
+            
+            part_col = col_map[part_col_key]
+            
+            # --- Parse data rows ---
             for row in ws.iter_rows(min_row=header_row_idx + 1, max_row=ws.max_row, values_only=True):
                 if not row or all(v is None for v in row):
                     continue
                 row_vals = [str(v).strip() if v is not None else "" for v in row]
                 
-                part_no = row_vals[col_map["Part No"]] if "Part No" in col_map and col_map["Part No"] < len(row_vals) else ""
-                desc = row_vals[col_map["Description"]] if "Description" in col_map and col_map["Description"] < len(row_vals) else ""
-                qty = row_vals[col_map["Qty"]] if "Qty" in col_map and col_map["Qty"] < len(row_vals) else ""
+                part_no = row_vals[part_col] if part_col < len(row_vals) else ""
+                desc = row_vals[desc_col] if desc_col < len(row_vals) else ""
+                qty = row_vals[qty_col] if qty_col is not None and qty_col < len(row_vals) else ""
+                
+                # If Drawing Number is "-", try falling back to Part No column
+                if (not part_no or part_no == "-") and part_col_key == "Drawing Number" and "Part No" in col_map:
+                    fallback = row_vals[col_map["Part No"]] if col_map["Part No"] < len(row_vals) else ""
+                    if fallback and fallback != "-" and fallback != "None":
+                        part_no = fallback
                 
                 if part_no and part_no != "-" and part_no != "None":
                     items.append({
@@ -292,8 +329,15 @@ async def parse_bom(file: UploadFile = File(...)):
                         "description": desc,
                         "qty": qty
                     })
+            
+            # If we found items on this sheet, don't scan further sheets
+            if items:
+                break
                     
         shutil.rmtree(tmp_dir, ignore_errors=True)
+        
+        if not ko_number:
+            ko_number = "UNKNOWN_KO"
         
         return {
             "success": True,
@@ -312,7 +356,7 @@ def bulk_create_bom_cards(req: BulkCreateRequest, user: dict = Depends(require_r
         if not part_no:
             continue
             
-        wo_number = f"{req.koNumber}-{part_no}"
+        wo_number = f"{req.koNumber}-{req.bomNumber}-{part_no}"
         
         # Check if exists
         exists = False
@@ -326,6 +370,7 @@ def bulk_create_bom_cards(req: BulkCreateRequest, user: dict = Depends(require_r
         card_data = {
             "workOrderNumber": wo_number,
             "koNumber": req.koNumber,
+            "bomNumber": req.bomNumber,
             "partNumber": part_no,
             "jobName": item.get("description", ""),
             "targetDate": (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d"),
@@ -424,21 +469,32 @@ def create_card(req: CreateCardRequest, current_user: dict = Depends(require_rol
 # ─── Step Actions ──────────────────────────────────────────────────────────────
 
 @app.put("/api/route-cards/{card_id}/steps/{step_id}/sign-off")
-def sign_off_step(card_id: str, step_id: str, req: SignOffRequest):
+def sign_off_step(card_id: str, step_id: str, req: SignOffRequest, current_user: dict = Depends(get_current_user)):
     if not req.operatorName or not req.operatorRole:
         raise HTTPException(400, "Sign-off requires operator name and role context.")
+        
+    card = db.get_route_card_details(card_id)
+    if not card:
+        raise HTTPException(404, "Route Card not found.")
+        
+    target_step = next((s for s in card["steps"] if s["id"] == step_id), None)
+    if not target_step:
+        raise HTTPException(404, "Step not found.")
+        
+    # Enforce RBAC
+    role = current_user.get("role")
+    wc = current_user.get("workCenter", "")
+    if role == "Operator" and wc and wc.lower() != target_step.get("processKey", "").lower():
+        raise HTTPException(403, f"Access denied. You are assigned to '{wc}' but this step requires '{target_step.get('processKey')}'.")
 
     updated = db.update_step_sign_off(
         card_id, step_id, req.operatorName, req.operatorRole.value, req.remarks, req.completionQty
     )
-    if not updated:
-        raise HTTPException(404, "Route Card or Step not found.")
 
-    target_step = next((s for s in updated["steps"] if s["id"] == step_id), None)
     db.log_activity(
-        req.userId or "u-2", req.operatorName, req.userEmail or "operator1@asmltd.com",
+        req.userId or current_user.get("id"), req.operatorName, req.userEmail or current_user.get("email"),
         "step sign-off",
-        f"Signed off {target_step['operationName'] if target_step else '?'} (Step {target_step['stepNumber'] if target_step else '?'}) on {updated['cardNumber']}"
+        f"Signed off {target_step['operationName']} (Step {target_step['stepNumber']}) on {updated['cardNumber']}"
     )
 
     if updated["status"] == "Completed":
@@ -451,7 +507,15 @@ def sign_off_step(card_id: str, step_id: str, req: SignOffRequest):
 
 
 @app.put("/api/route-cards/{card_id}/steps/{step_id}/progress")
-def progress_step(card_id: str, step_id: str):
+def progress_step(card_id: str, step_id: str, current_user: dict = Depends(get_current_user)):
+    card = db.get_route_card_details(card_id)
+    target_step = next((s for s in card["steps"] if s["id"] == step_id), None) if card else None
+    
+    role = current_user.get("role")
+    wc = current_user.get("workCenter", "")
+    if target_step and role == "Operator" and wc and wc.lower() != target_step.get("processKey", "").lower():
+        raise HTTPException(403, "Access denied. Process mismatch.")
+        
     updated = db.update_step_progress(card_id, step_id)
     if not updated:
         raise HTTPException(404, "Route Card or Step not found.")
@@ -459,7 +523,7 @@ def progress_step(card_id: str, step_id: str):
 
 
 @app.put("/api/route-cards/{card_id}/steps/{step_id}/flag")
-def flag_step(card_id: str, step_id: str, req: DeviationRequest):
+def flag_step(card_id: str, step_id: str, req: DeviationRequest, current_user: dict = Depends(get_current_user)):
     if not req.reason:
         raise HTTPException(400, "Flagging a deviation requires a reason.")
 
@@ -469,7 +533,7 @@ def flag_step(card_id: str, step_id: str, req: DeviationRequest):
 
     target_step = next((s for s in updated["steps"] if s["id"] == step_id), None)
     db.log_activity(
-        req.userId or "u-2", req.operatorName or "Operator", req.userEmail or "operator1@asmltd.com",
+        req.userId or current_user.get("id"), req.operatorName or current_user.get("name"), req.userEmail or current_user.get("email"),
         "deviation flagged",
         f"Flagged deviation on {target_step['operationName'] if target_step else '?'} for {updated['cardNumber']}. Reason: {req.reason}"
     )
@@ -483,17 +547,22 @@ def flag_step(card_id: str, step_id: str, req: DeviationRequest):
 
 
 @app.put("/api/route-cards/{card_id}/steps/{step_id}/iqc-fail")
-def iqc_fail(card_id: str, step_id: str, req: IQCFailRequest):
+def iqc_fail(card_id: str, step_id: str, req: IQCFailRequest, current_user: dict = Depends(get_current_user)):
     """Mark IQC as failed — reject / return to vendor."""
     if not req.reason:
         raise HTTPException(400, "IQC failure requires a reason.")
+        
+    role = current_user.get("role")
+    wc = current_user.get("workCenter", "")
+    if role == "Operator" and wc and wc.lower() != "iqc":
+        raise HTTPException(403, "Access denied. Only IQC operators can perform this action.")
 
     updated = db.update_iqc_fail(card_id, step_id, req.reason, req.remarks)
     if not updated:
         raise HTTPException(404, "Route Card, Step not found, or step is not IQC.")
 
     db.log_activity(
-        req.userId or "u-2", req.operatorName or "QC Inspector", req.userEmail or "qc@asmltd.com",
+        req.userId or current_user.get("id"), req.operatorName or current_user.get("name"), req.userEmail or current_user.get("email"),
         "IQC failed",
         f"IQC FAILED on {updated['cardNumber']}: {req.reason}"
     )
@@ -507,14 +576,19 @@ def iqc_fail(card_id: str, step_id: str, req: IQCFailRequest):
 
 
 @app.put("/api/route-cards/{card_id}/steps/{step_id}/iqc-reinspect")
-def iqc_reinspect(card_id: str, step_id: str, req: IQCReinspectRequest):
+def iqc_reinspect(card_id: str, step_id: str, req: IQCReinspectRequest, current_user: dict = Depends(get_current_user)):
     """Re-inspect after vendor return — resets IQC step for re-inspection."""
+    role = current_user.get("role")
+    wc = current_user.get("workCenter", "")
+    if role == "Operator" and wc and wc.lower() != "iqc":
+        raise HTTPException(403, "Access denied. Only IQC operators can perform this action.")
+        
     updated = db.update_iqc_reinspect(card_id, step_id, req.remarks)
     if not updated:
         raise HTTPException(404, "Route Card, Step not found, or step is not IQC.")
 
     db.log_activity(
-        req.userId or "u-2", req.operatorName or "QC Inspector", req.userEmail or "qc@asmltd.com",
+        req.userId or current_user.get("id"), req.operatorName or current_user.get("name"), req.userEmail or current_user.get("email"),
         "IQC re-inspection",
         f"IQC re-inspection initiated on {updated['cardNumber']} after vendor return."
     )
@@ -528,7 +602,7 @@ def iqc_reinspect(card_id: str, step_id: str, req: IQCReinspectRequest):
 
 
 @app.put("/api/route-cards/{card_id}/steps/{step_id}/resolve")
-def resolve_step(card_id: str, step_id: str, req: ResolveRequest):
+def resolve_step(card_id: str, step_id: str, req: ResolveRequest, current_user: dict = Depends(require_role([UserRole.Admin, UserRole.ShiftEngineer]))):
     if not req.remarks or not req.engineerName:
         raise HTTPException(400, "Resolution requires engineer name and remarks.")
 
@@ -537,7 +611,7 @@ def resolve_step(card_id: str, step_id: str, req: ResolveRequest):
         raise HTTPException(404, "Route Card or Step not found.")
 
     db.log_activity(
-        req.userId or "u-3", req.engineerName, "engineer@asmltd.com",
+        req.userId or current_user.get("id"), req.engineerName, current_user.get("email"),
         "deviation resolved",
         f"Resolved deviation on {updated['cardNumber']}: {req.remarks[:100]}"
     )
@@ -548,33 +622,31 @@ def resolve_step(card_id: str, step_id: str, req: ResolveRequest):
 
 @app.get("/api/route-cards/{card_id}/export")
 def export_excel(card_id: str, userId: Optional[str] = None, userName: Optional[str] = None, userEmail: Optional[str] = None):
-    from excel_gen import generate_traveler_excel
-
+    from pdf_gen import generate_traveler_pdf
+    from datetime import datetime
+    
     card = db.get_route_card_details(card_id)
     if not card:
         raise HTTPException(404, "Route card not found.")
-
+        
     try:
-        excel_bytes = generate_traveler_excel(card)
-    except Exception as e:
-        print(f"Error generating Excel: {e}")
-        # Fallback to pdf if excel fails (optional, but good for safety)
-        from pdf_gen import generate_traveler_pdf
         pdf_bytes = generate_traveler_pdf(card)
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=routecard-{card['cardNumber']}.pdf"},
-        )
-
+    except Exception as e:
+        print(f"Error generating PDF: {e}")
+        raise HTTPException(500, "Error generating PDF.")
+        
     if userId and userName:
-        db.log_activity(userId, userName, userEmail or "system@asmltd.com", "Excel generation",
-                        f"Exported route card {card['cardNumber']} to Excel")
+        db.log_activity(userId, userName, userEmail or "system@asmltd.com", "PDF generation",
+                        f"Exported route card {card['cardNumber']} to PDF")
+                        
+    date_str = datetime.now().strftime("%Y%m%d")
+    wo = card.get("workOrderNumber", "UNKNOWN").replace("/", "_")
+    filename = f"WO-{wo}-{date_str}.pdf"
 
     return Response(
-        content=excel_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=routecard-{card['cardNumber']}.xlsx"},
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 

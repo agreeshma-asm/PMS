@@ -7,6 +7,8 @@ and detects date mismatch alerts across the 7-step process chain.
 import openpyxl
 import os
 from datetime import datetime, timezone, timedelta
+import threading
+import time
 
 PMS_FILE_PATH = r"C:\Users\A30061\Downloads\PMS.xlsx"
 
@@ -361,17 +363,42 @@ def _serialize_record(record):
 
 _cache = {"data": None, "timestamp": None}
 _CACHE_TTL = 60  # seconds
+_cache_lock = threading.Lock()
+_bg_thread_started = False
+
+def _background_refresh():
+    while True:
+        try:
+            # Sleep first if data is already loaded so we don't immediately refresh
+            if _cache["data"] is not None:
+                time.sleep(_CACHE_TTL)
+            
+            data = _read_all_pms_data()
+            with _cache_lock:
+                _cache["data"] = data
+                _cache["timestamp"] = datetime.now()
+                
+            if _cache["data"] is None:
+                time.sleep(_CACHE_TTL)
+        except Exception as e:
+            print(f"Background refresh failed: {e}")
+            time.sleep(10)
 
 def _get_cached_data():
-    """Get PMS data with caching (re-read every 60s)."""
-    now = datetime.now()
-    if _cache["data"] is not None and _cache["timestamp"]:
-        if (now - _cache["timestamp"]).seconds < _CACHE_TTL:
-            return _cache["data"]
-    data = _read_all_pms_data()
-    _cache["data"] = data
-    _cache["timestamp"] = now
-    return data
+    """Get PMS data instantly (cache is refreshed in background thread)."""
+    global _bg_thread_started
+    
+    if not _bg_thread_started:
+        with _cache_lock:
+            if not _bg_thread_started:
+                if _cache["data"] is None:
+                    _cache["data"] = _read_all_pms_data()
+                    _cache["timestamp"] = datetime.now()
+                t = threading.Thread(target=_background_refresh, daemon=True)
+                t.start()
+                _bg_thread_started = True
+
+    return _cache["data"] or []
 
 
 def get_all_work_orders():
@@ -509,6 +536,7 @@ def get_alerts(limit=50):
 
 
 def invalidate_cache():
-    """Force re-read of PMS data on next access."""
-    _cache["data"] = None
-    _cache["timestamp"] = None
+    """Force re-read of PMS data in the background (returns instantly)."""
+    with _cache_lock:
+        _cache["data"] = None
+        _cache["timestamp"] = None
